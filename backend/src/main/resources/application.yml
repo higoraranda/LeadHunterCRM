@@ -1,0 +1,20 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  data:
+    mongodb:
+      # Local: roda um Mongo em localhost. Produção (Render): defina MONGODB_URI
+      # com a connection string do MongoDB Atlas (ex.: mongodb+srv://user:pass@cluster/leadhunter)
+      uri: ${MONGODB_URI:mongodb://localhost:27017/leadhunter}
+      auto-index-creation: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+app:
+  cors:
+    # Origens liberadas para o frontend. Aceita curingas (ex.: https://*.vercel.app).
+    # Separe múltiplas por vírgula. Em produção defina CORS_ALLOWED_ORIGINS.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}

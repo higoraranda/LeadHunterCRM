@@ -1,0 +1,21 @@
+# Blueprint do Render — cria o backend automaticamente ao conectar o repositório.
+# Render Dashboard > New > Blueprint > selecione este repositório.
+services:
+  - type: web
+    name: leadhunter-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/dashboard/funil
+    autoDeploy: true
+    envVars:
+      # Connection string do MongoDB Atlas (defina no painel — NÃO commite credenciais)
+      # Ex.: mongodb+srv://usuario:senha@cluster0.xxxxx.mongodb.net/leadhunter?retryWrites=true&w=majority
+      - key: MONGODB_URI
+        sync: false
+      # Origens do frontend liberadas no CORS. Aceita curingas.
+      # Ex.: https://seu-projeto.vercel.app,https://*.vercel.app
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

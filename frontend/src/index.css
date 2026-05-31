@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 24% 99%;
+    --foreground: 224 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 47% 11%;
+
+    --muted: 240 18% 95%;
+    --muted-foreground: 224 12% 46%;
+
+    --border: 240 16% 90%;
+    --input: 240 16% 88%;
+
+    --primary: 160 84% 34%;
+    --primary-foreground: 0 0% 100%;
+
+    --accent: 162 72% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --ring: 160 84% 34%;
+
+    --destructive: 0 74% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 62% 42%;
+    --warning: 38 92% 50%;
+
+    --radius: 0.85rem;
+  }
+
+  .dark {
+    --background: 230 28% 7%;
+    --foreground: 220 22% 96%;
+
+    --card: 230 24% 10%;
+    --card-foreground: 220 22% 96%;
+
+    --muted: 230 18% 16%;
+    --muted-foreground: 220 12% 66%;
+
+    --border: 230 16% 19%;
+    --input: 230 16% 22%;
+
+    --primary: 158 64% 47%;
+    --primary-foreground: 160 60% 6%;
+
+    --accent: 160 68% 52%;
+    --accent-foreground: 160 60% 6%;
+
+    --ring: 158 64% 47%;
+
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 58% 50%;
+    --warning: 38 95% 58%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco acessível e consistente */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Números tabulares (mono) para métricas alinhadas */
+  .tabular {
+    font-family: 'Geist Mono', ui-monospace, 'SFMono-Regular', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* Scrollbar discreta */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+}
+
+@layer components {
+  /* Fundo "aurora" sutil para a área principal */
+  .app-aurora {
+    background-image:
+      radial-gradient(60rem 60rem at 108% -12%, hsl(var(--primary) / 0.07), transparent 60%),
+      radial-gradient(48rem 48rem at -8% 0%, hsl(var(--accent) / 0.05), transparent 55%);
+  }
+
+  .glass {
+    @apply border border-border/70 bg-card/70 backdrop-blur-xl;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+
+  .gradient-primary {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.4s ease both;
+  }
+  .animate-slide-up {
+    animation: slide-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.2s ease both;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
