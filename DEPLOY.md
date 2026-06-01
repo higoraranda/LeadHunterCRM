@@ -1,95 +1,144 @@
-# Guia de Deploy — LeadHunter (Render + Vercel + MongoDB Atlas)
+# Guia de Deploy — LeadHunter (GitHub + MongoDB Atlas + Render + Vercel)
 
 Arquitetura hospedada:
 
 ```
-  Vercel (frontend React)  ──HTTPS──►  Render (backend Spring Boot)  ──►  MongoDB Atlas (M0 grátis)
+  Vercel (frontend React)  ──HTTPS──►  Render (backend Spring Boot)  ──►  MongoDB Atlas (512 MB grátis)
 ```
+
+> **Banco:** MongoDB Atlas M0 é **grátis para sempre e NÃO pede cartão de crédito**.
+> 512 MB comportam tranquilamente mais de 100 mil leads — para 800 clientes sobra MUITO espaço.
+> **Localmente** o app continua usando um Mongo em `localhost` (ou você pode apontar para o Atlas).
+
+A ordem é: **(1) GitHub → (2) MongoDB → (3) Render → (4) Vercel**.
 
 ---
 
-## 1) Banco de dados — MongoDB Atlas (grátis para sempre)
+## 1) Subir o código para o GitHub
 
-1. Crie a conta em https://www.mongodb.com/cloud/atlas/register
-2. **Create > Cluster > M0 (Free)**. Escolha uma região próxima (ex.: São Paulo / `sa-east-1`).
-3. Em **Database Access**, crie um usuário (ex.: `leadhunter`) com senha forte. Anote.
-4. Em **Network Access**, adicione `0.0.0.0/0` (permite o Render acessar) — ou os IPs do Render.
-5. Em **Database > Connect > Drivers**, copie a *connection string*. Algo como:
+O Render e a Vercel puxam o código do GitHub, então este é o primeiro passo.
+
+### 1.1. Criar o repositório no GitHub
+1. Acesse https://github.com/new
+2. Nome: `leadhunter` (ou o que preferir). Pode deixar **Private**.
+3. **NÃO** marque "Add README/.gitignore/license" (o projeto já tem `.gitignore`).
+4. Clique em **Create repository** e deixe a página aberta (vai mostrar a URL do repo).
+
+### 1.2. Enviar o projeto (rode no terminal, dentro da pasta do projeto)
+
+> No Windows, abra o **PowerShell** na pasta do projeto (Shift + botão direito > "Abrir janela do PowerShell aqui").
+
+```powershell
+git init
+git add .
+git commit -m "LeadHunter: app pronto para deploy (MongoDB + Render + Vercel)"
+git branch -M main
+git remote add origin https://github.com/SEU_USUARIO/leadhunter.git
+git push -u origin main
+```
+
+> Troque `SEU_USUARIO/leadhunter` pela URL que o GitHub mostrou.
+> Se pedir login, use seu usuário do GitHub e um **Personal Access Token** como senha
+> (GitHub > Settings > Developer settings > Personal access tokens).
+
+Pronto: o código está no GitHub. Toda vez que você fizer `git push`, Render e Vercel
+reimplantam automaticamente.
+
+---
+
+## 2) Banco de dados — MongoDB Atlas (grátis, sem cartão)
+
+1. Crie a conta em https://www.mongodb.com/cloud/atlas/register (pode usar Google).
+2. **Create a cluster > M0 (Free)**. Provedor/região próximos (ex.: AWS / São Paulo `sa-east-1`). **Create Deployment**.
+3. Aparece a janela **Connect**:
+   - **Create a database user**: defina um usuário (ex.: `leadhunter`) e uma senha. **Anote a senha.**
+   - **Add IP / Network Access**: escolha **Allow access from anywhere** (`0.0.0.0/0`) — necessário para o Render acessar.
+4. Depois clique em **Connect > Drivers** (linguagem Java). Copie a *connection string*:
+   ```
+   mongodb+srv://leadhunter:<db_password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   ```
+5. Ajuste a string assim (substitua a senha e inclua o nome do banco `leadhunter` antes do `?`):
    ```
    mongodb+srv://leadhunter:SUA_SENHA@cluster0.xxxxx.mongodb.net/leadhunter?retryWrites=true&w=majority
    ```
-   > Inclua o nome do banco (`/leadhunter`) antes do `?`. Substitua `SUA_SENHA`.
+   Essa string final é o valor de **`MONGODB_URI`** (vai no Render no próximo passo).
 
 ---
 
-## 2) Backend — Render (Web Service via Docker)
+## 3) Backend — Render (Web Service via Docker)
 
 O repositório já contém [`backend/Dockerfile`](backend/Dockerfile) e [`render.yaml`](render.yaml).
 
-**Opção A — Blueprint (mais rápido):**
-1. Suba o projeto para o GitHub.
-2. No Render: **New > Blueprint** e selecione o repositório. Ele lê o `render.yaml`.
-3. Preencha as variáveis quando solicitado (ver abaixo) e crie.
+1. Acesse https://render.com e entre com a conta do **GitHub**.
+2. **New > Blueprint** > selecione o repositório `leadhunter`. O Render lê o `render.yaml` sozinho.
+   - (Alternativa manual: **New > Web Service** > Runtime **Docker**, Root Directory `backend`.)
+3. Quando pedir as variáveis de ambiente, preencha:
 
-**Opção B — Manual:**
-1. Render: **New > Web Service** > conecte o repositório.
-2. **Runtime:** Docker. **Root Directory:** `backend`. (O `Dockerfile` será detectado.)
-3. **Instance Type:** Free.
-4. **Health Check Path:** `/api/dashboard/funil`
+   | Chave | Valor |
+   |---|---|
+   | `MONGODB_URI` | a connection string do passo 2 |
+   | `CORS_ALLOWED_ORIGINS` | `https://*.vercel.app` (depois refine para o seu domínio) |
 
-**Variáveis de ambiente (Environment):**
+   > `PORT` é injetado automaticamente pelo Render — não precisa definir.
+4. **Create** e aguarde o build (alguns minutos na primeira vez).
+5. A URL final será algo como `https://leadhunter-backend.onrender.com`.
+   Teste abrindo `https://leadhunter-backend.onrender.com/api/dashboard/funil` — deve retornar um JSON.
 
-| Chave | Valor |
-|---|---|
-| `MONGODB_URI` | a connection string do passo 1 |
-| `CORS_ALLOWED_ORIGINS` | `https://SEU-PROJETO.vercel.app,https://*.vercel.app` |
-
-> `PORT` é injetado automaticamente pelo Render — não precisa definir.
-
-Ao terminar, a URL do backend será algo como `https://leadhunter-backend.onrender.com`.
-Teste: abra `https://leadhunter-backend.onrender.com/api/dashboard/funil` (deve retornar um JSON).
-
-> Observação: no plano free o serviço **hiberna após ~15 min** sem uso e leva ~30–50s para
+> Plano free do Render: o serviço **hiberna após ~15 min** sem uso e leva ~30–50s para
 > "acordar" na primeira requisição. É normal.
 
 ---
 
-## 3) Frontend — Vercel
+## 4) Frontend — Vercel
 
-1. No Vercel: **Add New > Project** > importe o repositório.
-2. **Root Directory:** `frontend`. (Framework detectado: Vite. Há um `vercel.json` com as rotas SPA.)
-3. **Environment Variables:**
+1. Acesse https://vercel.com e entre com a conta do **GitHub**.
+2. **Add New > Project** > importe o repositório `leadhunter`.
+3. **Root Directory:** clique em **Edit** e selecione a pasta **`frontend`**.
+   (Framework detectado: Vite. Já existe um `vercel.json` com as rotas da SPA.)
+4. Em **Environment Variables**, adicione:
 
    | Chave | Valor |
    |---|---|
    | `VITE_API_URL` | a URL do backend no Render (ex.: `https://leadhunter-backend.onrender.com`) — **sem** `/api` no final |
 
-4. Deploy. A URL final (ex.: `https://leadhunter.vercel.app`) deve ser a mesma que você
-   colocou em `CORS_ALLOWED_ORIGINS` no Render.
+5. **Deploy**. A URL final será algo como `https://leadhunter.vercel.app`.
+6. **Ajuste o CORS:** volte ao Render > seu serviço > **Environment** e troque `CORS_ALLOWED_ORIGINS`
+   pela URL real da Vercel (ex.: `https://leadhunter.vercel.app`). Salve — o backend reinicia sozinho.
 
-> Se o domínio da Vercel for diferente do esperado, atualize `CORS_ALLOWED_ORIGINS` no Render
-> e faça um *redeploy* do backend.
+Abra a URL da Vercel: o sistema deve carregar e conversar com o backend.
 
 ---
 
-## 4) Rodar localmente (continua funcionando)
+## 5) Rodar localmente (continua funcionando)
+
+**Frontend:**
+```powershell
+cd frontend
+npm install
+npm run dev   # http://localhost:5173 (proxy de /api -> http://localhost:8080)
+```
 
 **Backend** (precisa de um MongoDB local OU aponte para o Atlas):
-```bash
+```powershell
 cd backend
-# Mongo local em mongodb://localhost:27017/leadhunter  (padrão), ou:
-# export MONGODB_URI="mongodb+srv://..."   (PowerShell: $env:MONGODB_URI="...")
+# Opção A: Mongo local em mongodb://localhost:27017/leadhunter (padrão)
+# Opção B: usar o Atlas -> defina a variável antes de rodar:
+#   $env:MONGODB_URI="mongodb+srv://leadhunter:SUA_SENHA@cluster0.xxxxx.mongodb.net/leadhunter?retryWrites=true&w=majority"
 ./mvnw spring-boot:run
 ```
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev   # http://localhost:5173  (proxy de /api -> http://localhost:8080)
-```
-
 Sem `VITE_API_URL`, o frontend usa o proxy do Vite para o backend local.
+
+---
+
+## Atualizações futuras
+Qualquer mudança no código:
+```powershell
+git add .
+git commit -m "descrição da mudança"
+git push
+```
+Render e Vercel reimplantam automaticamente.
 
 ---
 
