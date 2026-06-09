@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { LayoutDashboard, Users, PlusCircle, Target, Menu, X, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Users, PlusCircle, Target, Menu, X, Moon, Sun, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/lib/use-theme';
 
@@ -8,6 +8,7 @@ const links = [
   { to: '/', label: 'Dashboard', Icon: LayoutDashboard, end: true },
   { to: '/leads', label: 'Leads', Icon: Users, end: false },
   { to: '/leads/novo', label: 'Novo Lead', Icon: PlusCircle, end: false },
+  { to: '/financeiro', label: 'Financeiro', Icon: Wallet, end: false },
 ];
 
 function Brand() {

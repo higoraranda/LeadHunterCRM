@@ -18,3 +18,6 @@ enum StatusNegociacao {
 }
 
 enum Canal { COLD_CALL, WHATSAPP, EMAIL, INSTAGRAM, PRESENCIAL }
+
+/** Situação do pagamento do setup de um contrato fechado. */
+enum StatusPagamentoSetup { NAO_PAGO, PAGO_50, PAGO_100 }

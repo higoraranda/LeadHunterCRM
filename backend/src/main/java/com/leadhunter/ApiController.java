@@ -17,7 +17,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.*;
 
 @RestController
@@ -27,6 +29,12 @@ public class ApiController {
 
     private final LeadRepository leadRepo;
     private final InteracaoRepository interRepo;
+    private final CidadeRepository cidadeRepo;
+    private final DespesaRepository despesaRepo;
+    private final FinanceiroService finService;
+
+    /** Pasta virtual dos leads sem cidade preenchida. */
+    static final String SEM_CIDADE = "__SEM_CIDADE__";
 
     // ======================== LEADS ========================
 
@@ -77,6 +85,185 @@ public class ApiController {
         Lead l = leadRepo.findById(id).orElseThrow();
         l.setStatusNegociacao(StatusNegociacao.valueOf(body.get("statusNegociacao")));
         return leadRepo.save(l);
+    }
+
+    /** Edição inline de campos avulsos (cidade, categoria, status do site, etc.). */
+    @PatchMapping("/leads/{id}")
+    public Lead editarCampos(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        Lead l = leadRepo.findById(id).orElseThrow();
+        if (body.containsKey("cidade"))     l.setCidade(emptyStr(str(body.get("cidade"))));
+        if (body.containsKey("siteAtual"))  l.setSiteAtual(emptyStr(str(body.get("siteAtual"))));
+        if (body.containsKey("nomeNegocio")) {
+            String nome = str(body.get("nomeNegocio"));
+            if (nome != null && !nome.isBlank()) l.setNomeNegocio(nome.trim());
+        }
+        if (body.containsKey("categoriaServico"))
+            l.setCategoriaServico(parseEnum(CategoriaServico.class, body.get("categoriaServico")));
+        if (body.containsKey("statusSite"))
+            l.setStatusSite(parseEnum(StatusSite.class, body.get("statusSite")));
+        if (body.containsKey("nicho"))
+            l.setNicho(parseEnum(Nicho.class, body.get("nicho")));
+        return leadRepo.save(l);
+    }
+
+    // ======================== FINANCEIRO (contratos fechados) ========================
+
+    /** Cria/atualiza os dados financeiros de um lead (preserva mensalidades já quitadas). */
+    @PutMapping("/leads/{id}/financeiro")
+    public Lead salvarFinanceiro(@PathVariable String id, @RequestBody Financeiro fin) {
+        Lead l = leadRepo.findById(id).orElseThrow();
+        Financeiro atual = l.getFinanceiro();
+        if (atual != null && atual.getPagamentos() != null
+                && (fin.getPagamentos() == null || fin.getPagamentos().isEmpty())) {
+            fin.setPagamentos(atual.getPagamentos());
+        }
+        if (fin.getPagamentos() == null) fin.setPagamentos(new ArrayList<>());
+        l.setFinanceiro(fin);
+        return leadRepo.save(l);
+    }
+
+    /** Marca uma mensalidade (ciclo) como paga. valorPago = mensalidade + multa por atraso. */
+    @PostMapping("/leads/{id}/mensalidades/pagar")
+    public Lead pagarMensalidade(@PathVariable String id, @RequestBody Map<String, String> body) {
+        Lead l = leadRepo.findById(id).orElseThrow();
+        Financeiro f = l.getFinanceiro();
+        if (f == null) throw new IllegalStateException("Lead sem dados financeiros");
+        LocalDate venc = LocalDate.parse(body.get("vencimento"));
+        LocalDate dataPg = body.get("dataPagamento") != null && !body.get("dataPagamento").isBlank()
+                ? LocalDate.parse(body.get("dataPagamento")) : LocalDate.now();
+        if (f.getPagamentos() == null) f.setPagamentos(new ArrayList<>());
+        f.getPagamentos().removeIf(p -> venc.equals(p.getVencimento()));
+        MensalidadePagamento p = new MensalidadePagamento();
+        p.setVencimento(venc);
+        p.setDataPagamento(dataPg);
+        double mens = f.getMensalidadeValor() != null ? f.getMensalidadeValor() : 0;
+        p.setValorPago(finService.valorComMulta(mens, venc, dataPg));
+        f.getPagamentos().add(p);
+        return leadRepo.save(l);
+    }
+
+    /** Desfaz a baixa de uma mensalidade. */
+    @PostMapping("/leads/{id}/mensalidades/estornar")
+    public Lead estornarMensalidade(@PathVariable String id, @RequestBody Map<String, String> body) {
+        Lead l = leadRepo.findById(id).orElseThrow();
+        Financeiro f = l.getFinanceiro();
+        if (f != null && f.getPagamentos() != null && body.get("vencimento") != null) {
+            LocalDate venc = LocalDate.parse(body.get("vencimento"));
+            f.getPagamentos().removeIf(p -> venc.equals(p.getVencimento()));
+            leadRepo.save(l);
+        }
+        return l;
+    }
+
+    @GetMapping("/financeiro/resumo")
+    public FinanceiroService.ResumoMes finResumo(@RequestParam(required = false) String mes) {
+        return finService.resumoMes(parseMes(mes));
+    }
+
+    @GetMapping("/financeiro/serie")
+    public List<FinanceiroService.SeriePonto> finSerie(@RequestParam(required = false) String mes,
+                                                       @RequestParam(defaultValue = "6") int meses) {
+        return finService.serie(parseMes(mes), Math.max(1, Math.min(meses, 24)));
+    }
+
+    @GetMapping("/financeiro/cobrancas")
+    public List<FinanceiroService.Cobranca> finCobrancas() {
+        return finService.cobrancas(LocalDate.now());
+    }
+
+    // ======================== DESPESAS ========================
+
+    @GetMapping("/despesas")
+    public List<Despesa> listarDespesas(@RequestParam(required = false) String mes) {
+        List<Despesa> all = despesaRepo.findAll();
+        if (mes == null || mes.isBlank()) {
+            all.sort(Comparator.comparing(Despesa::getData, Comparator.nullsLast(Comparator.naturalOrder())));
+            return all;
+        }
+        YearMonth ym = YearMonth.parse(mes);
+        List<Despesa> filtradas = new ArrayList<>();
+        for (Despesa d : all)
+            if (d.getData() != null && YearMonth.from(d.getData()).equals(ym)) filtradas.add(d);
+        filtradas.sort(Comparator.comparing(Despesa::getData));
+        return filtradas;
+    }
+
+    @PostMapping("/despesas")
+    public ResponseEntity<Despesa> criarDespesa(@RequestBody Despesa d) {
+        if (d.getValor() == null) return ResponseEntity.badRequest().build();
+        d.setId(null);
+        if (d.getData() == null) d.setData(LocalDate.now());
+        return ResponseEntity.status(201).body(despesaRepo.save(d));
+    }
+
+    @DeleteMapping("/despesas/{id}")
+    public ResponseEntity<Void> deletarDespesa(@PathVariable String id) {
+        despesaRepo.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ======================== PASTAS (cidades / nichos) ========================
+
+    @GetMapping("/pastas/cidades")
+    public List<Map<String, Object>> pastasCidades() {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        long semCidade = 0;
+        for (Lead l : leadRepo.findAll()) {
+            String c = l.getCidade();
+            if (c == null || c.isBlank()) { semCidade++; continue; }
+            counts.merge(c.trim(), 1L, Long::sum);
+        }
+        Set<String> nomes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        nomes.addAll(counts.keySet());
+        for (Cidade c : cidadeRepo.findAll())
+            if (c.getNome() != null && !c.getNome().isBlank()) nomes.add(c.getNome().trim());
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (String nome : nomes) {
+            long total = counts.entrySet().stream()
+                    .filter(e -> e.getKey().equalsIgnoreCase(nome))
+                    .mapToLong(Map.Entry::getValue).sum();
+            out.add(Map.of("nome", nome, "total", total));
+        }
+        if (semCidade > 0) out.add(Map.of("nome", SEM_CIDADE, "total", semCidade));
+        return out;
+    }
+
+    @GetMapping("/pastas/nichos")
+    public List<Map<String, Object>> pastasNichos(@RequestParam String cidade) {
+        boolean sem = SEM_CIDADE.equals(cidade);
+        Map<Nicho, Long> counts = new EnumMap<>(Nicho.class);
+        for (Lead l : leadRepo.findAll()) {
+            boolean match = sem
+                    ? (l.getCidade() == null || l.getCidade().isBlank())
+                    : (l.getCidade() != null && l.getCidade().trim().equalsIgnoreCase(cidade.trim()));
+            if (!match) continue;
+            if (l.getNicho() != null) counts.merge(l.getNicho(), 1L, Long::sum);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Nicho n : Nicho.values())
+            out.add(Map.of("nicho", n.name(), "total", counts.getOrDefault(n, 0L)));
+        return out;
+    }
+
+    @PostMapping("/pastas/cidades")
+    public ResponseEntity<Map<String, Object>> criarCidade(@RequestBody Map<String, String> body) {
+        String nome = body.get("nome");
+        if (nome == null || nome.isBlank())
+            return ResponseEntity.badRequest().body(Map.of("erro", "Informe o nome da cidade"));
+        nome = nome.trim();
+        if (!cidadeRepo.existsByNomeIgnoreCase(nome)) {
+            Cidade c = new Cidade();
+            c.setNome(nome);
+            cidadeRepo.save(c);
+        }
+        return ResponseEntity.status(201).body(Map.of("nome", nome));
+    }
+
+    @DeleteMapping("/pastas/cidades")
+    public ResponseEntity<Void> deletarCidade(@RequestParam String nome) {
+        cidadeRepo.findByNomeIgnoreCase(nome).ifPresent(cidadeRepo::delete);
+        return ResponseEntity.noContent().build();
     }
 
     // ======================== INTERAÇÕES ========================
@@ -324,4 +511,18 @@ public class ApiController {
     }
 
     private static String empty(String s) { return s == null || s.isBlank() ? null : s; }
+
+    private static String str(Object o) { return o == null ? null : o.toString(); }
+
+    private static String emptyStr(String s) { return s == null || s.isBlank() ? null : s.trim(); }
+
+    private static <E extends Enum<E>> E parseEnum(Class<E> type, Object value) {
+        String s = str(value);
+        if (s == null || s.isBlank()) return null;
+        return Enum.valueOf(type, s.trim());
+    }
+
+    private static YearMonth parseMes(String mes) {
+        return (mes == null || mes.isBlank()) ? YearMonth.now() : YearMonth.parse(mes);
+    }
 }

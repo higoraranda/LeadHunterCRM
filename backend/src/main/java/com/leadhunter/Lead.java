@@ -36,6 +36,9 @@ public class Lead {
 
     private String observacoes;
 
+    /** Preenchido quando o lead é marcado como FECHADO. */
+    private Financeiro financeiro;
+
     @CreatedDate private LocalDateTime createdAt;
     @LastModifiedDate private LocalDateTime updatedAt;
 }

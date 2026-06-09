@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, Legend, CartesianGrid, Cell as PieCell,
 } from 'recharts';
 import {
-  Users, TrendingUp, CheckCircle2, Percent, ArrowUpRight, Trophy,
+  Users, TrendingUp, CheckCircle2, Percent, ArrowUpRight, Trophy, Calculator, ExternalLink,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,9 +71,21 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-7">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Visão geral do seu funil de prospecção.</p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Visão geral do seu funil de prospecção.</p>
+        </div>
+        <a
+          href="https://project-k3a8s.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 self-start rounded-lg gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
+        >
+          <Calculator size={18} className="shrink-0" />
+          Fazer orçamento
+          <ExternalLink size={14} className="opacity-80" />
+        </a>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

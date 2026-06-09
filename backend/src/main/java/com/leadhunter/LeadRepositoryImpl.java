@@ -22,8 +22,11 @@ public class LeadRepositoryImpl implements LeadRepositoryCustom {
         Query q = new Query();
         if (busca != null && !busca.isBlank())
             q.addCriteria(Criteria.where("nomeNegocio").regex(Pattern.quote(busca), "i"));
-        if (cidade != null && !cidade.isBlank())
-            q.addCriteria(Criteria.where("cidade").regex(Pattern.quote(cidade), "i"));
+        if ("__SEM_CIDADE__".equals(cidade))
+            q.addCriteria(new Criteria().orOperator(
+                    Criteria.where("cidade").is(null), Criteria.where("cidade").is("")));
+        else if (cidade != null && !cidade.isBlank())
+            q.addCriteria(Criteria.where("cidade").regex("^" + Pattern.quote(cidade) + "$", "i"));
         if (nicho != null) q.addCriteria(Criteria.where("nicho").is(nicho));
         if (status != null) q.addCriteria(Criteria.where("statusNegociacao").is(status));
         if (categoria != null) q.addCriteria(Criteria.where("categoriaServico").is(categoria));

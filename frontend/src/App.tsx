@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
 import NewLead from './pages/NewLead';
+import Financeiro from './pages/Financeiro';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="leads" element={<Leads />} />
         <Route path="leads/novo" element={<NewLead />} />
         <Route path="leads/:id" element={<LeadDetail />} />
+        <Route path="financeiro" element={<Financeiro />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
