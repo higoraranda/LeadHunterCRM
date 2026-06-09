@@ -304,7 +304,6 @@ public class ApiController {
     @PostMapping(value = "/leads/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> importar(@RequestParam("file") MultipartFile file,
                                                         @RequestParam("nicho") Nicho nicho,
-                                                        @RequestParam("categoriaServico") CategoriaServico categoria,
                                                         @RequestParam(value = "cidade", required = false) String cidadePadrao,
                                                         @RequestParam(value = "apenasComTelefone", defaultValue = "false") boolean apenasComTelefone) {
         int importados = 0, ignorados = 0;
@@ -360,11 +359,10 @@ public class ApiController {
                     l.setNumeroReviews(parseI(get(rec, hmap, "numeroReviews")));
                     l.setNicho(nicho);
                     boolean temSite = site != null && !site.isBlank();
-                    // Regra de negócio: se já tem site, oferta de SITE não faz sentido
-                    // -> força AUTOMACAO (mantém COMBO se foi a escolha do usuário)
-                    CategoriaServico cat = categoria;
-                    if (temSite && cat == CategoriaServico.SITE) cat = CategoriaServico.AUTOMACAO;
-                    l.setCategoriaServico(cat);
+                    // Categoria automática a partir do site:
+                    //  - já tem site  -> AUTOMACAO (vendemos só a automação)
+                    //  - não tem site -> COMBO (site + automação)
+                    l.setCategoriaServico(temSite ? CategoriaServico.AUTOMACAO : CategoriaServico.COMBO);
                     l.setStatusNegociacao(StatusNegociacao.NAO_CONTATADO);
                     l.setStatusSite(temSite ? StatusSite.SIM : StatusSite.NAO);
                     lote.add(l);

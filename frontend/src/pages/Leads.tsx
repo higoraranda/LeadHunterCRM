@@ -14,7 +14,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/table';
 import {
-  Lead, Page, Nicho, CategoriaServico, StatusNegociacao, Financeiro, StatusPagamentoSetup,
+  Lead, Page, Nicho, StatusNegociacao, Financeiro, StatusPagamentoSetup,
   CidadePasta, NichoPasta,
   NICHOS, CATEGORIAS, STATUS_NEGOCIACAO, STATUS_SITE, STATUS_PAGAMENTO_SETUP, SEM_CIDADE,
   labelNicho, labelStatus, labelSetupStatus,
@@ -648,7 +648,6 @@ function FinanceiroDialog({ lead, onClose, onDone }:
 function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
   { open: boolean; onClose: () => void; onDone: () => void; presetCidade: string; presetNicho: Nicho }) {
   const [file, setFile] = useState<File | null>(null);
-  const [categoria, setCategoria] = useState<CategoriaServico>('SITE');
   const [apenasComTelefone, setApenasComTelefone] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -659,7 +658,6 @@ function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
     const form = new FormData();
     form.append('file', file);
     form.append('nicho', presetNicho);
-    form.append('categoriaServico', categoria);
     if (presetCidade.trim()) form.append('cidade', presetCidade.trim());
     form.append('apenasComTelefone', String(apenasComTelefone));
     try {
@@ -699,11 +697,9 @@ function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
             Os leads entram já nesta cidade e nicho. Aceita exportações do Instant Data Scraper.
           </p>
         </div>
-        <div>
-          <Label>Categoria de serviço</Label>
-          <Select value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaServico)}>
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_META[c].label}</option>)}
-          </Select>
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Categoria definida automaticamente</p>
+          <p className="mt-0.5">Lead com site → <span className="font-medium text-foreground">Automação</span>. Lead sem site → <span className="font-medium text-foreground">Combo</span> (site + automação).</p>
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
           <input type="checkbox" checked={apenasComTelefone} onChange={(e) => setApenasComTelefone(e.target.checked)} className="h-4 w-4 accent-primary" />
