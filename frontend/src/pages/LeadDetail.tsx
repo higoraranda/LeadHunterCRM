@@ -13,12 +13,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Lead, Interacao, Canal, CATEGORIAS, NICHOS, STATUS_NEGOCIACAO,
-  STATUS_SITE, CANAIS, labelNicho, labelStatus,
+  STATUS_SITE, CANAIS, labelStatus,
 } from '@/types';
+import { useNichoLabels } from '@/lib/nichos';
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const nichoLabel = useNichoLabels();
   const [lead, setLead] = useState<Lead | null>(null);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [saving, setSaving] = useState(false);
@@ -98,7 +100,7 @@ export default function LeadDetail() {
             <Field label="Nicho">
               <Select value={lead.nicho ?? ''} onChange={(e) => set('nicho', (e.target.value || undefined) as any)}>
                 <option value="">—</option>
-                {NICHOS.map((n) => <option key={n} value={n}>{labelNicho(n)}</option>)}
+                {NICHOS.map((n) => <option key={n} value={n}>{nichoLabel(n)}</option>)}
               </Select>
             </Field>
             <Field label="Categoria">

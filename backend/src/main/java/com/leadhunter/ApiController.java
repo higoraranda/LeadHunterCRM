@@ -30,6 +30,7 @@ public class ApiController {
     private final LeadRepository leadRepo;
     private final InteracaoRepository interRepo;
     private final CidadeRepository cidadeRepo;
+    private final NichoLabelRepository nichoLabelRepo;
     private final DespesaRepository despesaRepo;
     private final FinanceiroService finService;
 
@@ -240,9 +241,11 @@ public class ApiController {
             if (!match) continue;
             if (l.getNicho() != null) counts.merge(l.getNicho(), 1L, Long::sum);
         }
+        Map<Nicho, String> labels = labelsCustom();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Nicho n : Nicho.values())
-            out.add(Map.of("nicho", n.name(), "total", counts.getOrDefault(n, 0L)));
+            out.add(Map.of("nicho", n.name(), "total", counts.getOrDefault(n, 0L),
+                    "label", labels.getOrDefault(n, labelPadrao(n))));
         return out;
     }
 
@@ -264,6 +267,84 @@ public class ApiController {
     public ResponseEntity<Void> deletarCidade(@RequestParam String nome) {
         cidadeRepo.findByNomeIgnoreCase(nome).ifPresent(cidadeRepo::delete);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Renomeia uma cidade: atualiza a pasta e todos os leads que estavam nela. */
+    @PatchMapping("/pastas/cidades")
+    public ResponseEntity<Map<String, Object>> renomearCidade(@RequestBody Map<String, String> body) {
+        String de = body.getOrDefault("de", "").trim();
+        String para = body.getOrDefault("para", "").trim();
+        if (de.isEmpty() || para.isEmpty())
+            return ResponseEntity.badRequest().body(Map.of("erro", "Informe o nome atual e o novo nome"));
+        if (SEM_CIDADE.equals(de))
+            return ResponseEntity.badRequest().body(Map.of("erro", "A pasta Sem cidade não pode ser renomeada"));
+
+        List<Lead> alterados = new ArrayList<>();
+        for (Lead l : leadRepo.findAll()) {
+            if (l.getCidade() != null && l.getCidade().trim().equalsIgnoreCase(de)) {
+                l.setCidade(para);
+                alterados.add(l);
+            }
+        }
+        if (!alterados.isEmpty()) leadRepo.saveAll(alterados);
+
+        // Pasta antiga vira a nova; se a nova já existia, as duas se fundem.
+        Optional<Cidade> antiga = cidadeRepo.findByNomeIgnoreCase(de);
+        if (antiga.isPresent()) {
+            Cidade c = antiga.get();
+            boolean fusao = cidadeRepo.findByNomeIgnoreCase(para)
+                    .map(alvo -> !alvo.getId().equals(c.getId())).orElse(false);
+            if (fusao) cidadeRepo.delete(c);
+            else { c.setNome(para); cidadeRepo.save(c); }
+        } else if (!cidadeRepo.existsByNomeIgnoreCase(para)) {
+            Cidade c = new Cidade();
+            c.setNome(para);
+            cidadeRepo.save(c);
+        }
+        return ResponseEntity.ok(Map.of("alterados", alterados.size()));
+    }
+
+    private static String labelPadrao(Nicho n) {
+        return n.name().replace('_', ' ');
+    }
+
+    private Map<Nicho, String> labelsCustom() {
+        Map<Nicho, String> map = new EnumMap<>(Nicho.class);
+        for (NichoLabel nl : nichoLabelRepo.findAll())
+            if (nl.getNicho() != null && nl.getLabel() != null && !nl.getLabel().isBlank())
+                map.put(nl.getNicho(), nl.getLabel());
+        return map;
+    }
+
+    /** Nome efetivo de cada pasta de nicho (custom quando existir, senão o padrão). */
+    @GetMapping("/nichos/labels")
+    public Map<String, String> nichoLabels() {
+        Map<Nicho, String> custom = labelsCustom();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Nicho n : Nicho.values())
+            out.put(n.name(), custom.getOrDefault(n, labelPadrao(n)));
+        return out;
+    }
+
+    /** Renomeia a pasta de um nicho. Label vazio volta ao nome padrão. */
+    @PatchMapping("/pastas/nichos")
+    public ResponseEntity<Map<String, String>> renomearNicho(@RequestBody Map<String, String> body) {
+        Nicho nicho;
+        try { nicho = Nicho.valueOf(body.getOrDefault("nicho", "")); }
+        catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("erro", "Nicho inválido"));
+        }
+        String label = body.getOrDefault("label", "").trim();
+        Optional<NichoLabel> existente = nichoLabelRepo.findByNicho(nicho);
+        if (label.isEmpty()) {
+            existente.ifPresent(nichoLabelRepo::delete);
+        } else {
+            NichoLabel nl = existente.orElseGet(NichoLabel::new);
+            nl.setNicho(nicho);
+            nl.setLabel(label);
+            nichoLabelRepo.save(nl);
+        }
+        return ResponseEntity.ok(nichoLabels());
     }
 
     // ======================== INTERAÇÕES ========================

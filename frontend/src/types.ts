@@ -102,7 +102,7 @@ export interface SeriePonto {
 }
 
 export interface CidadePasta { nome: string; total: number; }
-export interface NichoPasta { nicho: Nicho; total: number; }
+export interface NichoPasta { nicho: Nicho; total: number; label?: string; }
 
 export interface Interacao {
   id: string;

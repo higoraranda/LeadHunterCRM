@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Upload, Download, Search, RotateCcw, Inbox, Star, ChevronLeft, ChevronRight,
-  FolderPlus, MapPin, Tag, DollarSign, ExternalLink,
+  FolderPlus, MapPin, Tag, DollarSign, ExternalLink, Pencil,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fmtData } from '@/lib/utils';
+import { useNichoLabels, aplicarLabels } from '@/lib/nichos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -59,6 +60,7 @@ export default function Leads() {
 
 function Breadcrumb({ cidade, nicho, onRoot, onCidade }:
   { cidade: string | null; nicho: Nicho | null; onRoot: () => void; onCidade: () => void }) {
+  const nichoLabel = useNichoLabels();
   return (
     <nav className="flex flex-wrap items-center gap-1.5 text-sm">
       <button onClick={onRoot} className={cidade === null ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground'}>
@@ -75,7 +77,7 @@ function Breadcrumb({ cidade, nicho, onRoot, onCidade }:
       {cidade !== null && nicho !== null && (
         <>
           <ChevronRight size={14} className="text-muted-foreground" />
-          <span className="font-semibold text-foreground">{labelNicho(nicho)}</span>
+          <span className="font-semibold text-foreground">{nichoLabel(nicho)}</span>
         </>
       )}
     </nav>
@@ -87,6 +89,7 @@ function Breadcrumb({ cidade, nicho, onRoot, onCidade }:
 function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
   const [cidades, setCidades] = useState<CidadePasta[] | null>(null);
   const [novaOpen, setNovaOpen] = useState(false);
+  const [renomear, setRenomear] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api.get<CidadePasta[]>('/pastas/cidades')
@@ -125,12 +128,14 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
               title={cidadeLabel(c.nome)}
               count={c.total}
               onClick={() => onOpen(c.nome)}
+              onEdit={c.nome === SEM_CIDADE ? undefined : () => setRenomear(c.nome)}
             />
           ))}
         </div>
       )}
 
       <NovaCidadeDialog open={novaOpen} onClose={() => setNovaOpen(false)} onDone={() => { setNovaOpen(false); load(); }} />
+      <RenomearCidadeDialog cidade={renomear} onClose={() => setRenomear(null)} onDone={() => { setRenomear(null); load(); }} />
     </>
   );
 }
@@ -140,12 +145,14 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
 function NichosView({ cidade, onOpen, onBack }:
   { cidade: string; onOpen: (n: Nicho) => void; onBack: () => void }) {
   const [nichos, setNichos] = useState<NichoPasta[] | null>(null);
+  const [renomear, setRenomear] = useState<NichoPasta | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get<NichoPasta[]>('/pastas/nichos', { params: { cidade } })
       .then((r) => setNichos(r.data))
       .catch(() => toast.error('Erro ao carregar nichos'));
   }, [cidade]);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <>
@@ -164,10 +171,20 @@ function NichosView({ cidade, onOpen, onBack }:
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {nichos.map((n) => (
-            <FolderCard key={n.nicho} icon={Tag} title={labelNicho(n.nicho)} count={n.total} muted={n.total === 0} onClick={() => onOpen(n.nicho)} />
+            <FolderCard
+              key={n.nicho}
+              icon={Tag}
+              title={n.label ?? labelNicho(n.nicho)}
+              count={n.total}
+              muted={n.total === 0}
+              onClick={() => onOpen(n.nicho)}
+              onEdit={() => setRenomear(n)}
+            />
           ))}
         </div>
       )}
+
+      <RenomearNichoDialog pasta={renomear} onClose={() => setRenomear(null)} onDone={() => { setRenomear(null); load(); }} />
     </>
   );
 }
@@ -179,6 +196,7 @@ const emptyListFilters: ListFilters = { busca: '', statusNegociacao: '', categor
 
 function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho; onBack: () => void }) {
   const navigate = useNavigate();
+  const nichoLabel = useNichoLabels();
   const [page, setPage] = useState<Page<Lead> | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [filters, setFilters] = useState<ListFilters>(emptyListFilters);
@@ -240,7 +258,7 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
           <button onClick={onBack} className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <ChevronLeft size={15} /> Nichos
           </button>
-          <h1 className="text-2xl font-bold tracking-tight">{labelNicho(nicho)} <span className="text-muted-foreground">· {cidadeLabel(cidade)}</span></h1>
+          <h1 className="text-2xl font-bold tracking-tight">{nichoLabel(nicho)} <span className="text-muted-foreground">· {cidadeLabel(cidade)}</span></h1>
           <p className="mt-1 text-sm text-muted-foreground">{page ? `${page.totalElements} leads nesta pasta` : 'Carregando…'}</p>
         </div>
         <div className="flex gap-2">
@@ -504,12 +522,15 @@ async function exportar(params: Record<string, any>) {
 
 /* ============================ Componentes de pasta ============================ */
 
-function FolderCard({ icon: Icon, title, count, onClick, muted }:
-  { icon: React.ElementType; title: string; count: number; onClick: () => void; muted?: boolean }) {
+function FolderCard({ icon: Icon, title, count, onClick, onEdit, muted }:
+  { icon: React.ElementType; title: string; count: number; onClick: () => void; onEdit?: () => void; muted?: boolean }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-card transition-all hover:border-ring/40 hover:shadow-glow"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-card transition-all hover:border-ring/40 hover:shadow-glow"
     >
       <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${muted ? 'bg-muted text-muted-foreground' : 'bg-primary/12 text-primary'}`}>
         <Icon size={20} />
@@ -518,8 +539,18 @@ function FolderCard({ icon: Icon, title, count, onClick, muted }:
         <span className="block truncate text-sm font-semibold">{title}</span>
         <span className="block text-xs text-muted-foreground tabular">{count} {count === 1 ? 'lead' : 'leads'}</span>
       </span>
+      {onEdit && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          title="Renomear pasta"
+          aria-label="Renomear pasta"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Pencil size={14} />
+        </button>
+      )}
       <ChevronRight size={16} className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-    </button>
+    </div>
   );
 }
 
@@ -586,6 +617,95 @@ function NovaCidadeDialog({ open, onClose, onDone }: { open: boolean; onClose: (
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={submitting}>{submitting ? 'Criando…' : 'Criar'}</Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/* ============================ Diálogos: renomear pastas ============================ */
+
+function RenomearCidadeDialog({ cidade, onClose, onDone }:
+  { cidade: string | null; onClose: () => void; onDone: () => void }) {
+  const [nome, setNome] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (cidade) setNome(cidade); }, [cidade]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!cidade) return;
+    const novo = nome.trim();
+    if (!novo) return toast.error('Informe o novo nome');
+    if (novo === cidade) return onClose();
+    setSubmitting(true);
+    try {
+      const r = await api.patch<{ alterados: number }>('/pastas/cidades', { de: cidade, para: novo });
+      const n = r.data.alterados;
+      toast.success(n > 0 ? `Cidade renomeada — ${n} ${n === 1 ? 'lead atualizado' : 'leads atualizados'}` : 'Cidade renomeada');
+      onDone();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.erro || 'Falha ao renomear cidade');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!cidade} onClose={onClose} title={`Renomear ${cidade ?? ''}`} className="max-w-sm">
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <Label>Novo nome</Label>
+          <Input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Todos os leads desta cidade passam para o novo nome. Se já existir uma pasta com esse nome, as duas se juntam.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>{submitting ? 'Salvando…' : 'Renomear'}</Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function RenomearNichoDialog({ pasta, onClose, onDone }:
+  { pasta: NichoPasta | null; onClose: () => void; onDone: () => void }) {
+  const [nome, setNome] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (pasta) setNome(pasta.label ?? labelNicho(pasta.nicho)); }, [pasta]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!pasta) return;
+    setSubmitting(true);
+    try {
+      const r = await api.patch<Record<string, string>>('/pastas/nichos', { nicho: pasta.nicho, label: nome.trim() });
+      aplicarLabels(r.data);
+      toast.success('Pasta renomeada');
+      onDone();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.erro || 'Falha ao renomear pasta');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!pasta} onClose={onClose} title={`Renomear ${pasta ? labelNicho(pasta.nicho) : ''}`} className="max-w-sm">
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <Label>Nome da pasta</Label>
+          <Input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} placeholder={pasta ? labelNicho(pasta.nicho) : ''} />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            O novo nome vale para este nicho em todas as cidades. Deixe vazio para voltar ao nome padrão.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>{submitting ? 'Salvando…' : 'Renomear'}</Button>
         </div>
       </form>
     </Dialog>
@@ -687,6 +807,7 @@ function FinanceiroDialog({ lead, onClose, onDone }:
 
 function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
   { open: boolean; onClose: () => void; onDone: () => void; presetCidade: string; presetNicho: Nicho }) {
+  const nichoLabel = useNichoLabels();
   const [file, setFile] = useState<File | null>(null);
   const [apenasComTelefone, setApenasComTelefone] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -727,7 +848,7 @@ function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
             <Tag size={15} className="text-primary" />
-            <span className="truncate">{labelNicho(presetNicho)}</span>
+            <span className="truncate">{nichoLabel(presetNicho)}</span>
           </div>
         </div>
         <div>

@@ -9,8 +9,9 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { STATUS_NEGOCIACAO, labelNicho } from '@/types';
+import { STATUS_NEGOCIACAO } from '@/types';
 import { STATUS_META, CATEGORIA_META } from '@/lib/status';
+import { useNichoLabels } from '@/lib/nichos';
 import { useTheme } from '@/lib/use-theme';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ interface Resumo {
 
 export default function Dashboard() {
   const { theme } = useTheme();
+  const nichoLabel = useNichoLabels();
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [funil, setFunil] = useState<Record<string, number>>({});
 
@@ -66,7 +68,7 @@ export default function Dashboard() {
   }));
 
   const nichoData = Object.entries(resumo?.porNicho ?? {})
-    .map(([n, v]) => ({ nicho: labelNicho(n as any), count: v }))
+    .map(([n, v]) => ({ nicho: nichoLabel(n as any), count: v }))
     .sort((a, b) => b.count - a.count);
 
   return (
