@@ -358,7 +358,9 @@ public class ApiController {
                     l.setAvaliacao(parseD(get(rec, hmap, "avaliacao")));
                     l.setNumeroReviews(parseI(get(rec, hmap, "numeroReviews")));
                     l.setNicho(nicho);
-                    boolean temSite = site != null && !site.isBlank();
+                    // Link de WhatsApp/rede social no lugar do site conta como "sem site",
+                    // mas fica salvo em siteAtual para conferência na listagem.
+                    boolean temSite = site != null && !site.isBlank() && !isLinkNaoSite(site);
                     // Categoria automática a partir do site:
                     //  - já tem site  -> AUTOMACAO (vendemos só a automação)
                     //  - não tem site -> COMBO (site + automação)
@@ -410,6 +412,21 @@ public class ApiController {
         if (low.contains("google.com/aclk")) return null;   // anúncio do Google
         if (low.contains("datasus.gov.br")) return null;    // cadastro público, não é o site da empresa
         return s;
+    }
+
+    // Domínios que aparecem como "site" no Google Maps mas são só perfil/contato
+    // (deve casar com LINKS_NAO_SITE do frontend).
+    private static final List<String> DOMINIOS_NAO_SITE = List.of(
+            "wa.me", "whatsapp.com", "instagram.com", "facebook.com", "fb.com",
+            "linktr.ee", "t.me");
+
+    private static boolean isLinkNaoSite(String url) {
+        String href = url.matches("(?i)^https?://.*") ? url : "https://" + url.trim();
+        String host;
+        try { host = java.net.URI.create(href).getHost(); } catch (Exception e) { return false; }
+        if (host == null) return false;
+        String h = host.toLowerCase().replaceFirst("^www\\.", "");
+        return DOMINIOS_NAO_SITE.stream().anyMatch(d -> h.equals(d) || h.endsWith("." + d));
     }
 
     private static String limparEndereco(String s) {

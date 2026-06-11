@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Upload, Download, Search, RotateCcw, Inbox, Star, ChevronLeft, ChevronRight,
-  FolderPlus, MapPin, Tag, DollarSign,
+  FolderPlus, MapPin, Tag, DollarSign, ExternalLink,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fmtData } from '@/lib/utils';
@@ -334,14 +334,17 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
                 </Select>
               </TD>
               <TD onClick={(e) => e.stopPropagation()}>
-                <Select
-                  className="h-8 w-[148px] text-xs"
-                  value={lead.statusSite ?? ''}
-                  onChange={(e) => patchField(lead, { statusSite: e.target.value || null })}
-                >
-                  <option value="">—</option>
-                  {STATUS_SITE.map((s) => <option key={s} value={s}>{STATUS_SITE_META[s].label}</option>)}
-                </Select>
+                <div className="space-y-1">
+                  <Select
+                    className="h-8 w-[148px] text-xs"
+                    value={lead.statusSite ?? ''}
+                    onChange={(e) => patchField(lead, { statusSite: e.target.value || null })}
+                  >
+                    <option value="">—</option>
+                    {STATUS_SITE.map((s) => <option key={s} value={s}>{STATUS_SITE_META[s].label}</option>)}
+                  </Select>
+                  <SiteLink url={lead.siteAtual} />
+                </div>
               </TD>
               <TD>
                 {lead.avaliacao ? (
@@ -404,6 +407,43 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
         onDone={() => { setFinanceLead(null); fetchLeads(); }}
       />
     </>
+  );
+}
+
+/* ============================ Link do site do lead ============================ */
+
+// Domínios que aparecem como "site" no Google Maps mas são só perfil/contato,
+// não um site de verdade — sinalizados para o usuário não confiar no status SIM.
+const LINKS_NAO_SITE: Array<{ test: RegExp; label: string }> = [
+  { test: /(^|\.)wa\.me$|(^|\.)whatsapp\.com$/i, label: 'WhatsApp' },
+  { test: /(^|\.)instagram\.com$/i, label: 'Instagram' },
+  { test: /(^|\.)facebook\.com$|(^|\.)fb\.com$/i, label: 'Facebook' },
+  { test: /(^|\.)linktr\.ee$/i, label: 'Linktree' },
+  { test: /(^|\.)t\.me$/i, label: 'Telegram' },
+];
+
+function SiteLink({ url }: { url?: string }) {
+  if (!url?.trim()) return null;
+  const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  let host = url;
+  try { host = new URL(href).hostname.replace(/^www\./, ''); } catch { /* mostra o texto cru */ }
+  const naoSite = LINKS_NAO_SITE.find((s) => s.test.test(host));
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={url}
+      className="flex max-w-[148px] items-center gap-1 px-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
+    >
+      <ExternalLink size={11} className="shrink-0" />
+      <span className="truncate">{host}</span>
+      {naoSite && (
+        <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[10px] font-medium text-amber-500">
+          {naoSite.label}
+        </span>
+      )}
+    </a>
   );
 }
 
@@ -700,6 +740,7 @@ function ImportDialog({ open, onClose, onDone, presetCidade, presetNicho }:
         <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <p className="font-medium text-foreground">Categoria definida automaticamente</p>
           <p className="mt-0.5">Lead com site → <span className="font-medium text-foreground">Automação</span>. Lead sem site → <span className="font-medium text-foreground">Combo</span> (site + automação).</p>
+          <p className="mt-0.5">Link de WhatsApp ou rede social no lugar do site conta como <span className="font-medium text-foreground">sem site</span>.</p>
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
           <input type="checkbox" checked={apenasComTelefone} onChange={(e) => setApenasComTelefone(e.target.checked)} className="h-4 w-4 accent-primary" />
