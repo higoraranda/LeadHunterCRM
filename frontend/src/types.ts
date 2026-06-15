@@ -25,6 +25,7 @@ export interface MensalidadePagamento {
 export interface Financeiro {
   setupValor?: number;
   setupStatus?: StatusPagamentoSetup;
+  setupDataPagamento?: string;  // ISO date — mês em que a receita do setup entra no lucro
   mensalidadeValor?: number;
   dataEntrega?: string;      // ISO date — 1º vencimento = +30 dias
   pagamentos?: MensalidadePagamento[];

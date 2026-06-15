@@ -81,6 +81,15 @@ public class ApiController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Apaga TODOS os leads (e suas interações). Usado para recomeçar a base do zero. */
+    @DeleteMapping("/leads")
+    public ResponseEntity<Map<String, Object>> deletarTodos() {
+        long total = leadRepo.count();
+        interRepo.deleteAll();
+        leadRepo.deleteAll();
+        return ResponseEntity.ok(Map.of("deletados", total));
+    }
+
     @PatchMapping("/leads/{id}/status")
     public Lead mudarStatus(@PathVariable String id, @RequestBody Map<String, String> body) {
         Lead l = leadRepo.findById(id).orElseThrow();
@@ -119,6 +128,19 @@ public class ApiController {
             fin.setPagamentos(atual.getPagamentos());
         }
         if (fin.getPagamentos() == null) fin.setPagamentos(new ArrayList<>());
+
+        // A data do pagamento do setup define o mês em que a receita entra no lucro.
+        // Pago (50%/100%): usa a data enviada; senão mantém a anterior ou carimba hoje.
+        // Não pago: zera a data.
+        boolean setupPago = fin.getSetupStatus() == StatusPagamentoSetup.PAGO_50
+                || fin.getSetupStatus() == StatusPagamentoSetup.PAGO_100;
+        if (!setupPago) {
+            fin.setSetupDataPagamento(null);
+        } else if (fin.getSetupDataPagamento() == null) {
+            LocalDate anterior = atual != null ? atual.getSetupDataPagamento() : null;
+            fin.setSetupDataPagamento(anterior != null ? anterior : LocalDate.now());
+        }
+
         l.setFinanceiro(fin);
         return leadRepo.save(l);
     }

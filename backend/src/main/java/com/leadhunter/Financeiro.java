@@ -22,6 +22,13 @@ public class Financeiro {
     private Double setupValor;
     private StatusPagamentoSetup setupStatus;
 
+    /**
+     * Data em que o setup foi marcado como pago (50% ou 100%). Define em qual mês a
+     * receita do setup entra no lucro — normalmente o dia em que o status virou "pago".
+     * Fica nula enquanto o setup não está pago.
+     */
+    private LocalDate setupDataPagamento;
+
     private Double mensalidadeValor;
 
     /** Data em que o site/automação foi entregue. Define o 1º vencimento (+30 dias). */

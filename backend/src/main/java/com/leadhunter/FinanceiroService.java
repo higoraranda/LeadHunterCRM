@@ -121,9 +121,11 @@ public class FinanceiroService {
             Financeiro f = l.getFinanceiro();
             String servico = l.getCategoriaServico() != null ? l.getCategoriaServico().name() : "OUTRO";
 
-            // Setup reconhecido no mês da entrega
+            // Setup reconhecido no mês em que o pagamento foi marcado (pago 50% / 100%).
+            // Registros antigos sem essa data caem no mês da entrega (compatibilidade).
             double setupMes = 0;
-            if (f.getDataEntrega() != null && YearMonth.from(f.getDataEntrega()).equals(mes)
+            LocalDate dataSetup = f.getSetupDataPagamento() != null ? f.getSetupDataPagamento() : f.getDataEntrega();
+            if (dataSetup != null && YearMonth.from(dataSetup).equals(mes)
                     && f.getSetupValor() != null) {
                 setupMes = round2(f.getSetupValor() * fracaoSetup(f.getSetupStatus()));
             }

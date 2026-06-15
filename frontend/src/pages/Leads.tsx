@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Upload, Download, Search, RotateCcw, Inbox, Star, ChevronLeft, ChevronRight,
-  FolderPlus, MapPin, Tag, DollarSign, ExternalLink, Pencil,
+  FolderPlus, MapPin, Tag, DollarSign, ExternalLink, Pencil, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fmtData } from '@/lib/utils';
@@ -90,6 +90,7 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
   const [cidades, setCidades] = useState<CidadePasta[] | null>(null);
   const [novaOpen, setNovaOpen] = useState(false);
   const [renomear, setRenomear] = useState<string | null>(null);
+  const [apagarOpen, setApagarOpen] = useState(false);
 
   const load = useCallback(() => {
     api.get<CidadePasta[]>('/pastas/cidades')
@@ -99,6 +100,7 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
   useEffect(() => { load(); }, [load]);
 
   const exportarTudo = () => exportar({});
+  const totalLeads = (cidades ?? []).reduce((s, c) => s + c.total, 0);
 
   return (
     <>
@@ -108,6 +110,12 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
           <p className="mt-1 text-sm text-muted-foreground">Escolha uma cidade para abrir os nichos.</p>
         </div>
         <div className="flex gap-2">
+          {totalLeads > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setApagarOpen(true)}
+              className="border-rose-500/40 text-rose-500 hover:bg-rose-500/10 hover:text-rose-500">
+              <Trash2 size={16} /> Apagar todos
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={exportarTudo}><Download size={16} /> Exportar</Button>
           <Button size="sm" onClick={() => setNovaOpen(true)}><FolderPlus size={16} /> Nova cidade</Button>
         </div>
@@ -136,7 +144,64 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
 
       <NovaCidadeDialog open={novaOpen} onClose={() => setNovaOpen(false)} onDone={() => { setNovaOpen(false); load(); }} />
       <RenomearCidadeDialog cidade={renomear} onClose={() => setRenomear(null)} onDone={() => { setRenomear(null); load(); }} />
+      <ApagarTodosDialog open={apagarOpen} total={totalLeads} onClose={() => setApagarOpen(false)} onDone={() => { setApagarOpen(false); load(); }} />
     </>
+  );
+}
+
+/* ============================ Diálogo: apagar todos os leads ============================ */
+
+function ApagarTodosDialog({ open, total, onClose, onDone }:
+  { open: boolean; total: number; onClose: () => void; onDone: () => void }) {
+  const [confirma, setConfirma] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (open) setConfirma(''); }, [open]);
+
+  const podeApagar = confirma.trim().toUpperCase() === 'APAGAR';
+
+  const apagar = async () => {
+    if (!podeApagar) return;
+    setSubmitting(true);
+    try {
+      const r = await api.delete<{ deletados: number }>('/leads');
+      toast.success(`${r.data.deletados} ${r.data.deletados === 1 ? 'lead apagado' : 'leads apagados'}`);
+      onDone();
+    } catch {
+      toast.error('Falha ao apagar os leads');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} title="Apagar todos os leads" className="max-w-sm">
+      <div className="space-y-3">
+        <div className="flex gap-3 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <p>
+            Isto apaga <span className="font-semibold">os {total} leads</span> e todo o histórico de interações.
+            Não dá pra desfazer. As pastas de cidade continuam.
+          </p>
+        </div>
+        <div>
+          <Label>Para confirmar, digite <span className="font-semibold">APAGAR</span></Label>
+          <Input
+            autoFocus
+            value={confirma}
+            onChange={(e) => setConfirma(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && podeApagar) apagar(); }}
+            placeholder="APAGAR"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="button" variant="destructive" disabled={!podeApagar || submitting} onClick={apagar}>
+            {submitting ? 'Apagando…' : 'Apagar todos'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -724,8 +789,10 @@ function addDias(iso: string, dias: number) {
 function FinanceiroDialog({ lead, onClose, onDone }:
   { lead: Lead | null; onClose: () => void; onDone: () => void }) {
   const fin = lead?.financeiro;
+  const hoje = () => new Date().toISOString().slice(0, 10);
   const [setupValor, setSetupValor] = useState('');
   const [setupStatus, setSetupStatus] = useState<StatusPagamentoSetup>('PAGO_50');
+  const [setupDataPagamento, setSetupDataPagamento] = useState('');
   const [mensalidadeValor, setMensalidadeValor] = useState('');
   const [dataEntrega, setDataEntrega] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -734,10 +801,13 @@ function FinanceiroDialog({ lead, onClose, onDone }:
     if (!lead) return;
     setSetupValor(fin?.setupValor != null ? String(fin.setupValor) : '');
     setSetupStatus(fin?.setupStatus ?? 'PAGO_50');
+    setSetupDataPagamento(fin?.setupDataPagamento ?? hoje());
     setMensalidadeValor(fin?.mensalidadeValor != null ? String(fin.mensalidadeValor) : '');
-    setDataEntrega(fin?.dataEntrega ?? new Date().toISOString().slice(0, 10));
+    setDataEntrega(fin?.dataEntrega ?? hoje());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead]);
+
+  const setupPago = setupStatus !== 'NAO_PAGO';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -746,6 +816,7 @@ function FinanceiroDialog({ lead, onClose, onDone }:
     const body: Financeiro = {
       setupValor: setupValor ? Number(setupValor) : undefined,
       setupStatus,
+      setupDataPagamento: setupPago ? (setupDataPagamento || hoje()) : undefined,
       mensalidadeValor: mensalidadeValor ? Number(mensalidadeValor) : undefined,
       dataEntrega: dataEntrega || undefined,
     };
@@ -779,6 +850,15 @@ function FinanceiroDialog({ lead, onClose, onDone }:
               {STATUS_PAGAMENTO_SETUP.map((s) => <option key={s} value={s}>{labelSetupStatus(s)}</option>)}
             </Select>
           </div>
+          {setupPago && (
+            <div className="col-span-2">
+              <Label>Data do pagamento do setup</Label>
+              <Input type="date" value={setupDataPagamento} onChange={(e) => setSetupDataPagamento(e.target.value)} />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                O lucro do setup entra no mês desta data — normalmente o dia em que o cliente pagou.
+              </p>
+            </div>
+          )}
           <div>
             <Label>Mensalidade (R$)</Label>
             <Input type="number" step="0.01" min="0" value={mensalidadeValor} onChange={(e) => setMensalidadeValor(e.target.value)} placeholder="Ex: 300" />
