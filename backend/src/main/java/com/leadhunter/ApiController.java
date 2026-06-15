@@ -81,13 +81,15 @@ public class ApiController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Apaga TODOS os leads (e suas interações). Usado para recomeçar a base do zero. */
+    /** Apaga todos os leads de uma pasta (cidade + nicho) e as interações deles. */
     @DeleteMapping("/leads")
-    public ResponseEntity<Map<String, Object>> deletarTodos() {
-        long total = leadRepo.count();
-        interRepo.deleteAll();
-        leadRepo.deleteAll();
-        return ResponseEntity.ok(Map.of("deletados", total));
+    public ResponseEntity<Map<String, Object>> deletarDaPasta(
+            @RequestParam Nicho nicho,
+            @RequestParam(required = false) String cidade) {
+        List<Lead> alvos = leadRepo.filtrarLista(null, nicho, empty(cidade), null, null, null);
+        for (Lead l : alvos) interRepo.deleteByLeadId(l.getId());
+        leadRepo.deleteAll(alvos);
+        return ResponseEntity.ok(Map.of("deletados", alvos.size()));
     }
 
     @PatchMapping("/leads/{id}/status")

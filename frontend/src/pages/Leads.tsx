@@ -90,7 +90,6 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
   const [cidades, setCidades] = useState<CidadePasta[] | null>(null);
   const [novaOpen, setNovaOpen] = useState(false);
   const [renomear, setRenomear] = useState<string | null>(null);
-  const [apagarOpen, setApagarOpen] = useState(false);
 
   const load = useCallback(() => {
     api.get<CidadePasta[]>('/pastas/cidades')
@@ -100,7 +99,6 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
   useEffect(() => { load(); }, [load]);
 
   const exportarTudo = () => exportar({});
-  const totalLeads = (cidades ?? []).reduce((s, c) => s + c.total, 0);
 
   return (
     <>
@@ -110,12 +108,6 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
           <p className="mt-1 text-sm text-muted-foreground">Escolha uma cidade para abrir os nichos.</p>
         </div>
         <div className="flex gap-2">
-          {totalLeads > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setApagarOpen(true)}
-              className="border-rose-500/40 text-rose-500 hover:bg-rose-500/10 hover:text-rose-500">
-              <Trash2 size={16} /> Apagar todos
-            </Button>
-          )}
           <Button variant="outline" size="sm" onClick={exportarTudo}><Download size={16} /> Exportar</Button>
           <Button size="sm" onClick={() => setNovaOpen(true)}><FolderPlus size={16} /> Nova cidade</Button>
         </div>
@@ -144,15 +136,14 @@ function CidadesView({ onOpen }: { onOpen: (cidade: string) => void }) {
 
       <NovaCidadeDialog open={novaOpen} onClose={() => setNovaOpen(false)} onDone={() => { setNovaOpen(false); load(); }} />
       <RenomearCidadeDialog cidade={renomear} onClose={() => setRenomear(null)} onDone={() => { setRenomear(null); load(); }} />
-      <ApagarTodosDialog open={apagarOpen} total={totalLeads} onClose={() => setApagarOpen(false)} onDone={() => { setApagarOpen(false); load(); }} />
     </>
   );
 }
 
-/* ============================ Diálogo: apagar todos os leads ============================ */
+/* ============================ Diálogo: apagar os leads da pasta ============================ */
 
-function ApagarTodosDialog({ open, total, onClose, onDone }:
-  { open: boolean; total: number; onClose: () => void; onDone: () => void }) {
+function ApagarPastaDialog({ open, cidade, nicho, nichoLabel, onClose, onDone }:
+  { open: boolean; cidade: string; nicho: Nicho; nichoLabel: string; onClose: () => void; onDone: () => void }) {
   const [confirma, setConfirma] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -164,7 +155,7 @@ function ApagarTodosDialog({ open, total, onClose, onDone }:
     if (!podeApagar) return;
     setSubmitting(true);
     try {
-      const r = await api.delete<{ deletados: number }>('/leads');
+      const r = await api.delete<{ deletados: number }>('/leads', { params: { nicho, cidade } });
       toast.success(`${r.data.deletados} ${r.data.deletados === 1 ? 'lead apagado' : 'leads apagados'}`);
       onDone();
     } catch {
@@ -175,13 +166,14 @@ function ApagarTodosDialog({ open, total, onClose, onDone }:
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title="Apagar todos os leads" className="max-w-sm">
+    <Dialog open={open} onClose={onClose} title="Apagar leads desta pasta" className="max-w-sm">
       <div className="space-y-3">
         <div className="flex gap-3 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <p>
-            Isto apaga <span className="font-semibold">os {total} leads</span> e todo o histórico de interações.
-            Não dá pra desfazer. As pastas de cidade continuam.
+            Isto apaga <span className="font-semibold">todos os leads</span> da pasta{' '}
+            <span className="font-semibold">{nichoLabel} · {cidadeLabel(cidade)}</span> e o histórico de
+            interações deles. Não dá pra desfazer. A pasta continua.
           </p>
         </div>
         <div>
@@ -268,6 +260,7 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [financeLead, setFinanceLead] = useState<Lead | null>(null);
+  const [apagarOpen, setApagarOpen] = useState(false);
 
   const baseParams = useCallback(() => {
     const p: Record<string, any> = { nicho };
@@ -327,6 +320,12 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
           <p className="mt-1 text-sm text-muted-foreground">{page ? `${page.totalElements} leads nesta pasta` : 'Carregando…'}</p>
         </div>
         <div className="flex gap-2">
+          {(page?.totalElements ?? 0) > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setApagarOpen(true)}
+              className="border-rose-500/40 text-rose-500 hover:bg-rose-500/10 hover:text-rose-500">
+              <Trash2 size={16} /> Apagar todos
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => exportar(baseParams())}><Download size={16} /> Exportar</Button>
           <Button size="sm" onClick={() => setImportOpen(true)}><Upload size={16} /> Importar CSV aqui</Button>
         </div>
@@ -488,6 +487,15 @@ function LeadsListView({ cidade, nicho, onBack }: { cidade: string; nicho: Nicho
         lead={financeLead}
         onClose={() => setFinanceLead(null)}
         onDone={() => { setFinanceLead(null); fetchLeads(); }}
+      />
+
+      <ApagarPastaDialog
+        open={apagarOpen}
+        cidade={cidade}
+        nicho={nicho}
+        nichoLabel={nichoLabel(nicho)}
+        onClose={() => setApagarOpen(false)}
+        onDone={() => { setApagarOpen(false); setPageIndex(0); fetchLeads(); }}
       />
     </>
   );
