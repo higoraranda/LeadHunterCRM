@@ -458,8 +458,11 @@ public class ApiController {
                     String site = limparSite(get(rec, hmap, "siteAtual"));
                     l.setSiteAtual(site);
                     l.setEndereco(limparEndereco(get(rec, hmap, "endereco")));
-                    String cidade = get(rec, hmap, "cidade");
-                    l.setCidade(cidade != null ? cidade : (cidadePadrao != null && !cidadePadrao.isBlank() ? cidadePadrao : null));
+                    // A pasta escolhida manda: quando o import é feito dentro de uma cidade,
+                    // todos os leads entram nela e a coluna de cidade do CSV é ignorada
+                    // (ela costuma vir como "Salto - SP" e acabava criando uma pasta nova).
+                    String cidadeCsv = get(rec, hmap, "cidade");
+                    l.setCidade(cidadePadrao != null && !cidadePadrao.isBlank() ? cidadePadrao.trim() : cidadeCsv);
                     l.setAvaliacao(parseD(get(rec, hmap, "avaliacao")));
                     l.setNumeroReviews(parseI(get(rec, hmap, "numeroReviews")));
                     l.setNicho(nicho);
